@@ -1,29 +1,38 @@
 package org.latency.quickfix;
 
 import net.openhft.chronicle.core.Jvm;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTask;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTestHarness;
+import org.openjdk.jmh.runner.RunnerException;
 import quickfix.*;
 import quickfix.field.*;
 import quickfix.fix42.ExecutionReport;
 import quickfix.fix42.NewOrderSingle;
 
 import java.util.Date;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.stream.LongStream;
 
 /**
  * Created by daniel on 19/02/2016.
- * Latency task to test sending a message in QuickFix
+ * JMH task to test sending a message in QuickFix
  */
-public class QFLatencyTask implements LatencyTask {
+public class QFMeasureSimple {
 
 
     private QFClient client;
-    private LatencyTestHarness lth;
     private static NewOrderSingle newOrderSingle;
     private static ExecutionReport executionReport;
+    private Semaphore semaphore = new Semaphore(1);
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws RunnerException, InterruptedException {
+        new QFMeasureSimple().init();
+    }
+
+
+    public void init() throws InterruptedException {
+        semaphore.acquire();
+
         executionReport = new ExecutionReport();
         executionReport.set(new AvgPx(110.11));
         executionReport.set(new CumQty(7));
@@ -53,20 +62,15 @@ public class QFLatencyTask implements LatencyTask {
         newOrderSingle.set(new SecurityID("LCOM1"));
         newOrderSingle.set(new Account("ABCTEST1"));
 
-        LatencyTestHarness lth = new LatencyTestHarness()
-                .warmUp(20_000)
-                .messageCount(10_000)
-                .throughput(2_000)
-                .runs(3)
-                .accountForCoordinatedOmmission(false)
-                .build(new QFLatencyTask());
-        lth.start();
-    }
 
-    @Override
-    public void init(LatencyTestHarness lth) {
-        this.lth = lth;
-        Executors.newSingleThreadExecutor().submit(() ->
+        ExecutorService exec = Executors.newSingleThreadExecutor(
+                r -> {
+                    Thread t = Executors.defaultThreadFactory().newThread(r);
+                    t.setDaemon(true);
+                    return t;
+                });
+
+        exec.submit(() ->
         {
             QFServer server = new QFServer();
             server.start();
@@ -74,22 +78,36 @@ public class QFLatencyTask implements LatencyTask {
         Jvm.pause(3000);
         client = new QFClient();
         client.start();
+
+        int iterations = 20_000;
+        long[] results = new long[iterations];
+
+        //warmup
+        for (int i = 0; i < iterations; i++) {
+            run(results, i);
+        }
+        results = new long[iterations];
+
+        for (int i = 0; i < iterations; i++) {
+            run(results, i);
+        }
+
+        System.out.println("ave time per run " + ((int)LongStream.of(results).average().getAsDouble()*100)/100_000.0 + "us");
     }
 
-    @Override
-    public void complete() {
-        System.exit(0);
-    }
-
-    @Override
-    public void run(long startTimeNs) {
-        newOrderSingle.set(new ClOrdID(Long.toString(startTimeNs)));
+    public void run(long[] results, int counter) throws InterruptedException {
+        long start = System.nanoTime();
+        newOrderSingle.set(new ClOrdID(""+System.nanoTime()));
         try {
             Session.sendToTarget(newOrderSingle, client.sessionId);
         } catch (SessionNotFound sessionNotFound) {
             sessionNotFound.printStackTrace();
         }
+        semaphore.acquire();
+        results[counter] = System.nanoTime()-start;
     }
+
+
 
     private class QFServer implements Application {
         void start() {
@@ -188,7 +206,7 @@ public class QFLatencyTask implements LatencyTask {
         public void fromApp(Message message, SessionID arg1) throws FieldNotFound,
                 IncorrectDataFormat, IncorrectTagValue, UnsupportedMessageType {
             long startTime = Long.parseLong(((ExecutionReport) message).getClOrdID().getValue());
-            lth.sample(System.nanoTime() - startTime);
+            semaphore.release();
         }
 
         @Override

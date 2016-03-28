@@ -1,29 +1,54 @@
 package org.latency.quickfix;
 
 import net.openhft.chronicle.core.Jvm;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTask;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTestHarness;
+import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.runner.Runner;
+import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.openjdk.jmh.runner.options.TimeValue;
 import quickfix.*;
 import quickfix.field.*;
 import quickfix.fix42.ExecutionReport;
 import quickfix.fix42.NewOrderSingle;
 
 import java.util.Date;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by daniel on 19/02/2016.
- * Latency task to test sending a message in QuickFix
+ * JMH task to test sending a message in QuickFix
  */
-public class QFLatencyTask implements LatencyTask {
+@State(Scope.Thread)
+public class QFJMH{
 
 
     private QFClient client;
-    private LatencyTestHarness lth;
     private static NewOrderSingle newOrderSingle;
     private static ExecutionReport executionReport;
+    private Semaphore semaphore = new Semaphore(1);
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws RunnerException {
+        Options opt = new OptionsBuilder()
+                .include(QFJMH.class.getSimpleName())
+                .warmupIterations(2)
+                .forks(1)
+                .measurementIterations(2)
+                .mode(Mode.SampleTime)
+                .measurementTime(TimeValue.seconds(5))
+                .timeUnit(TimeUnit.MICROSECONDS)
+                .build();
+
+        new Runner(opt).run();
+    }
+
+    @Setup
+    public void init() throws InterruptedException {
+        semaphore.acquire();
+
         executionReport = new ExecutionReport();
         executionReport.set(new AvgPx(110.11));
         executionReport.set(new CumQty(7));
@@ -53,20 +78,15 @@ public class QFLatencyTask implements LatencyTask {
         newOrderSingle.set(new SecurityID("LCOM1"));
         newOrderSingle.set(new Account("ABCTEST1"));
 
-        LatencyTestHarness lth = new LatencyTestHarness()
-                .warmUp(20_000)
-                .messageCount(10_000)
-                .throughput(2_000)
-                .runs(3)
-                .accountForCoordinatedOmmission(false)
-                .build(new QFLatencyTask());
-        lth.start();
-    }
 
-    @Override
-    public void init(LatencyTestHarness lth) {
-        this.lth = lth;
-        Executors.newSingleThreadExecutor().submit(() ->
+        ExecutorService exec = Executors.newSingleThreadExecutor(
+                r -> {
+                    Thread t = Executors.defaultThreadFactory().newThread(r);
+                    t.setDaemon(true);
+                    return t;
+                });
+
+        exec.submit(() ->
         {
             QFServer server = new QFServer();
             server.start();
@@ -76,20 +96,19 @@ public class QFLatencyTask implements LatencyTask {
         client.start();
     }
 
-    @Override
-    public void complete() {
-        System.exit(0);
-    }
+    @Benchmark
+    public void run() throws InterruptedException {
 
-    @Override
-    public void run(long startTimeNs) {
-        newOrderSingle.set(new ClOrdID(Long.toString(startTimeNs)));
+        newOrderSingle.set(new ClOrdID(""+System.nanoTime()));
         try {
             Session.sendToTarget(newOrderSingle, client.sessionId);
         } catch (SessionNotFound sessionNotFound) {
             sessionNotFound.printStackTrace();
         }
+        semaphore.acquire();
     }
+
+
 
     private class QFServer implements Application {
         void start() {
@@ -188,7 +207,7 @@ public class QFLatencyTask implements LatencyTask {
         public void fromApp(Message message, SessionID arg1) throws FieldNotFound,
                 IncorrectDataFormat, IncorrectTagValue, UnsupportedMessageType {
             long startTime = Long.parseLong(((ExecutionReport) message).getClOrdID().getValue());
-            lth.sample(System.nanoTime() - startTime);
+            semaphore.release();
         }
 
         @Override
