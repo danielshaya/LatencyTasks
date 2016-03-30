@@ -1,7 +1,8 @@
 package org.latency.serialisation.date;
 
-import net.openhft.chronicle.core.latencybenchmark.LatencyTask;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTestHarness;
+import net.openhft.chronicle.core.jlbh.JLBHOptions;
+import net.openhft.chronicle.core.jlbh.JLBHTask;
+import net.openhft.chronicle.core.jlbh.JLBH;
 
 import java.io.*;
 import java.lang.reflect.InvocationTargetException;
@@ -10,20 +11,20 @@ import java.util.Date;
 /**
  * Created by daniel on 23/03/2016.
  */
-public class DateSerialisedLatencyTask implements LatencyTask{
+public class DateSerialisedJLBHTask implements JLBHTask {
     private Date d = new Date();
-    private LatencyTestHarness lth;
+    private JLBH lth;
 
     public static void main(String[] args) throws InvocationTargetException, IllegalAccessException, IOException, ClassNotFoundException {
-        LatencyTestHarness lth = new LatencyTestHarness()
-                .warmUp(400_000)
-                .messageCount(1_000_000)
+        JLBHOptions jlbhOptions = new JLBHOptions()
+                .warmUpIterations(400_000)
+                .iterations(1_000_000)
                 .throughput(100_000)
                 .runs(3)
                 .recordOSJitter(true)
                 .accountForCoordinatedOmmission(true)
-                .build(new DateSerialisedLatencyTask());
-        lth.start();
+                .jlbhTask(new DateSerialisedJLBHTask());
+        new JLBH(jlbhOptions).start();
     }
 
     @Override
@@ -42,7 +43,7 @@ public class DateSerialisedLatencyTask implements LatencyTask{
     }
 
     @Override
-    public void init(LatencyTestHarness lth) {
+    public void init(JLBH lth) {
         this.lth = lth;
     }
 

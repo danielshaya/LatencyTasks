@@ -2,8 +2,9 @@ package org.latency.tcp;
 
 import net.openhft.affinity.Affinity;
 import net.openhft.chronicle.core.Jvm;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTask;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTestHarness;
+import net.openhft.chronicle.core.jlbh.JLBHOptions;
+import net.openhft.chronicle.core.jlbh.JLBHTask;
+import net.openhft.chronicle.core.jlbh.JLBH;
 import net.openhft.chronicle.core.util.NanoSampler;
 
 import java.io.EOFException;
@@ -59,11 +60,11 @@ was 24 / 32  65 / 84  336 - 1,470 micro seconds
 Starting latency test rate: 2000 ... Loop back echo latency 50/90 99/99.9 99.99 - worst
 was 26 / 60  72 / 92  270 - 1,210 micro seconds
  */
-public class TcpFixLatencyTask implements LatencyTask {
+public class TcpFixJLBHTask implements JLBHTask {
     public final static int port = 8007;
     public static final boolean BLOCKING = false;
     private final int SERVER_CPU = Integer.getInteger("server.cpu", 0);
-    private LatencyTestHarness lth;
+    private JLBH lth;
     private String fixMessage;
     private byte[] bytesReturned;
     private ByteBuffer bb;
@@ -72,17 +73,17 @@ public class TcpFixLatencyTask implements LatencyTask {
     private NanoSampler onServer;
 
     public static void main(String[] args) {
-        LatencyTestHarness lth = new LatencyTestHarness()
-                .warmUp(50000)
-                .messageCount(50000)
+        JLBHOptions jlbhOptions = new JLBHOptions()
+                .warmUpIterations(50000)
+                .iterations(50000)
                 .throughput(10000)
                 .runs(5)
-                .build(new TcpFixLatencyTask());
-        lth.start();
+                .jlbhTask(new TcpFixJLBHTask());
+        new JLBH(jlbhOptions).start();
     }
 
     @Override
-    public void init(LatencyTestHarness lth) {
+    public void init(JLBH lth) {
         this.lth = lth;
         onServer = lth.addProbe("on server");
         try {

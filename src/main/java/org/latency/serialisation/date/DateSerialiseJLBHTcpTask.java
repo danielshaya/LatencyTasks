@@ -2,8 +2,9 @@ package org.latency.serialisation.date;
 
 import net.openhft.affinity.Affinity;
 import net.openhft.chronicle.core.Jvm;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTask;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTestHarness;
+import net.openhft.chronicle.core.jlbh.JLBHOptions;
+import net.openhft.chronicle.core.jlbh.JLBHTask;
+import net.openhft.chronicle.core.jlbh.JLBH;
 import net.openhft.chronicle.core.util.NanoSampler;
 
 import java.io.*;
@@ -12,15 +13,14 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.Calendar;
 import java.util.Date;
 
-public class DateSerialiseLatencyTcpTask implements LatencyTask {
+public class DateSerialiseJLBHTcpTask implements JLBHTask {
     public final static int port = 8007;
     public static final boolean BLOCKING = false;
     private final int SERVER_CPU = Integer.getInteger("server.cpu", 0);
     private Date d = new Date();
-    private LatencyTestHarness lth;
+    private JLBH lth;
     private String fixMessage;
 
     private ByteBuffer bb;
@@ -30,19 +30,19 @@ public class DateSerialiseLatencyTcpTask implements LatencyTask {
     private NanoSampler calendarProbe;
 
     public static void main(String[] args) {
-        LatencyTestHarness lth = new LatencyTestHarness()
-                .warmUp(50_000)
-                .messageCount(50_000)
+        JLBHOptions lth = new JLBHOptions()
+                .warmUpIterations(50_000)
+                .iterations(50_000)
                 .throughput(100_000)
                 .runs(3)
                 .recordOSJitter(true)
                 .accountForCoordinatedOmmission(true)
-                .build(new DateSerialiseLatencyTcpTask());
-        lth.start();
+                .jlbhTask(new DateSerialiseJLBHTcpTask());
+        new JLBH(lth).start();
     }
 
     @Override
-    public void init(LatencyTestHarness lth) {
+    public void init(JLBH lth) {
         this.lth = lth;
         onServer = lth.addProbe("on server");
         calendarProbe = lth.addProbe("calendar ");

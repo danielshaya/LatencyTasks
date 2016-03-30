@@ -2,9 +2,9 @@ package org.latency.tcp;
 
 import net.openhft.affinity.Affinity;
 import net.openhft.chronicle.core.Jvm;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTask;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTestHarness;
-import net.openhft.chronicle.core.util.NanoSampler;
+import net.openhft.chronicle.core.jlbh.JLBHOptions;
+import net.openhft.chronicle.core.jlbh.JLBHTask;
+import net.openhft.chronicle.core.jlbh.JLBH;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -14,26 +14,26 @@ import java.nio.ByteOrder;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
-public class TcpBenchmark implements LatencyTask {
+public class TcpBenchmark implements JLBHTask {
     public final static int port = 8007;
     public static final boolean BLOCKING = false;
     private final int SERVER_CPU = Integer.getInteger("server.cpu", 0);
-    private LatencyTestHarness lth;
+    private JLBH lth;
     private ByteBuffer bb;
     private SocketChannel socket;
 
     public static void main(String[] args) {
-        LatencyTestHarness lth = new LatencyTestHarness()
-                .warmUp(50000)
-                .messageCount(50000)
+        JLBHOptions jlbhOptions = new JLBHOptions()
+                .warmUpIterations(50000)
+                .iterations(50000)
                 .throughput(10000)
                 .runs(5)
-                .build(new TcpBenchmark());
-        lth.start();
+                .jlbhTask(new TcpBenchmark());
+        new JLBH(jlbhOptions).start();
     }
 
     @Override
-    public void init(LatencyTestHarness lth) {
+    public void init(JLBH lth) {
         this.lth = lth;
         try {
             runServer(port);

@@ -1,8 +1,9 @@
 package org.latency.quickfix;
 
 import net.openhft.chronicle.core.Jvm;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTask;
-import net.openhft.chronicle.core.latencybenchmark.LatencyTestHarness;
+import net.openhft.chronicle.core.jlbh.JLBHOptions;
+import net.openhft.chronicle.core.jlbh.JLBHTask;
+import net.openhft.chronicle.core.jlbh.JLBH;
 import quickfix.*;
 import quickfix.field.*;
 import quickfix.fix42.ExecutionReport;
@@ -15,11 +16,11 @@ import java.util.concurrent.Executors;
  * Created by daniel on 19/02/2016.
  * Latency task to test sending a message in QuickFix
  */
-public class QFLatencyTask implements LatencyTask {
+public class QFJLBHTask implements JLBHTask {
 
 
     private QFClient client;
-    private LatencyTestHarness lth;
+    private JLBH lth;
     private static NewOrderSingle newOrderSingle;
     private static ExecutionReport executionReport;
 
@@ -53,18 +54,18 @@ public class QFLatencyTask implements LatencyTask {
         newOrderSingle.set(new SecurityID("LCOM1"));
         newOrderSingle.set(new Account("ABCTEST1"));
 
-        LatencyTestHarness lth = new LatencyTestHarness()
-                .warmUp(20_000)
-                .messageCount(10_000)
+        JLBHOptions jlbhOptions = new JLBHOptions()
+                .warmUpIterations(20_000)
+                .iterations(10_000)
                 .throughput(2_000)
                 .runs(3)
                 .accountForCoordinatedOmmission(false)
-                .build(new QFLatencyTask());
-        lth.start();
+                .jlbhTask(new QFJLBHTask());
+        new JLBH(jlbhOptions).start();
     }
 
     @Override
-    public void init(LatencyTestHarness lth) {
+    public void init(JLBH lth) {
         this.lth = lth;
         Executors.newSingleThreadExecutor().submit(() ->
         {
