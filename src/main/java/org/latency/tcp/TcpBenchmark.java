@@ -5,6 +5,7 @@ import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.jlbh.JLBHOptions;
 import net.openhft.chronicle.core.jlbh.JLBHTask;
 import net.openhft.chronicle.core.jlbh.JLBH;
+import net.openhft.chronicle.core.util.NanoSampler;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -15,12 +16,13 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
 public class TcpBenchmark implements JLBHTask {
-    public final static int port = 8007;
-    public static final boolean BLOCKING = false;
+    private final static int port = 8007;
+    private static final boolean BLOCKING = false;
     private final int SERVER_CPU = Integer.getInteger("server.cpu", 0);
-    private JLBH lth;
+    private JLBH jlbh;
     private ByteBuffer bb;
     private SocketChannel socket;
+    private NanoSampler client2serverProbe;
 
     public static void main(String[] args) {
         JLBHOptions jlbhOptions = new JLBHOptions()
@@ -33,8 +35,9 @@ public class TcpBenchmark implements JLBHTask {
     }
 
     @Override
-    public void init(JLBH lth) {
-        this.lth = lth;
+    public void init(JLBH jlbh) {
+        this.jlbh = jlbh;
+        client2serverProbe = jlbh.addProbe("client2server");
         try {
             runServer(port);
             Jvm.pause(200);
@@ -50,13 +53,6 @@ public class TcpBenchmark implements JLBHTask {
 
         bb = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder());
 
-    }
-
-//    int counter = 0;
-
-    @Override
-    public void complete() {
-        System.exit(0);
     }
 
     private void runServer(int port) throws IOException {
@@ -80,7 +76,7 @@ public class TcpBenchmark implements JLBHTask {
                 System.out.println("Connected " + socket);
 
                 ByteBuffer bb = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder());
-                for (; ; ) {
+                while (true) {
 
                     do {
                         if (socket.read(bb) < 0)
@@ -129,19 +125,21 @@ public class TcpBenchmark implements JLBHTask {
             }
 
         bb.position(0);
-        while (bb.remaining() > 0)
+        while (bb.remaining() > 0) {
             try {
                 if (socket.read(bb) < 0) ;
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
-            //if (bb.getLong(0) != 0x123456789ABCDEFL)
-            //    throw new AssertionError("read error");
+        }
 
         bb.flip();
 
+        jlbh.sample(System.nanoTime() - startTimeNs);
+    }
 
-        lth.sample(System.nanoTime() - startTimeNs);
+    @Override
+    public void complete() {
+        System.exit(0);
     }
 }
