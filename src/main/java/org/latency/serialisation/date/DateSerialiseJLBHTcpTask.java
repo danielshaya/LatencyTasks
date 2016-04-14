@@ -32,7 +32,7 @@ public class DateSerialiseJLBHTcpTask implements JLBHTask {
     public static void main(String[] args) {
         JLBHOptions lth = new JLBHOptions()
                 .warmUpIterations(50_000)
-                .iterations(50_000)
+                .iterations(1_000_000)
                 .throughput(100_000)
                 .runs(3)
                 .recordOSJitter(true)

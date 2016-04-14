@@ -23,6 +23,7 @@ public class TcpBenchmark implements JLBHTask {
     private ByteBuffer bb;
     private SocketChannel socket;
     private NanoSampler client2serverProbe;
+    private NanoSampler server2clientProbe;
 
     public static void main(String[] args) {
         JLBHOptions jlbhOptions = new JLBHOptions()
@@ -38,6 +39,7 @@ public class TcpBenchmark implements JLBHTask {
     public void init(JLBH jlbh) {
         this.jlbh = jlbh;
         client2serverProbe = jlbh.addProbe("client2server");
+        server2clientProbe = jlbh.addProbe("server2clientProbe");
         try {
             runServer(port);
             Jvm.pause(200);
@@ -50,9 +52,7 @@ public class TcpBenchmark implements JLBHTask {
             e.printStackTrace();
         }
 
-
         bb = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder());
-
     }
 
     private void runServer(int port) throws IOException {
@@ -84,9 +84,10 @@ public class TcpBenchmark implements JLBHTask {
                     } while (bb.remaining() > 0);
 
                     bb.flip();
-                    long l = bb.getLong();
+                    long time = System.nanoTime();
+                    client2serverProbe.sampleNanos(time -bb.getLong());
                     bb.position(0);
-                    bb.limit(8);
+                    bb.putLong(0, time);
 
                     if (socket.write(bb) < 0)
                         throw new EOFException();
@@ -127,13 +128,15 @@ public class TcpBenchmark implements JLBHTask {
         bb.position(0);
         while (bb.remaining() > 0) {
             try {
-                if (socket.read(bb) < 0) ;
+                if (socket.read(bb) < 0);
+
+                if(bb.position()==8) {
+                    server2clientProbe.sampleNanos(System.nanoTime() - bb.getLong(0));
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
-
-        bb.flip();
 
         jlbh.sample(System.nanoTime() - startTimeNs);
     }
