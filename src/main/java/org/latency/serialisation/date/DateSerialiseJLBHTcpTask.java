@@ -15,25 +15,27 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Date;
 
+/**
+ * Created to show the effects of running code within more complex code.
+ * Date serialisation as a micro benchmark vs date serialisation inside a TCP call.
+ */
 public class DateSerialiseJLBHTcpTask implements JLBHTask {
-    public final static int port = 8007;
-    public static final boolean BLOCKING = false;
+    private final static int port = 8007;
+    private static final boolean BLOCKING = false;
     private final int SERVER_CPU = Integer.getInteger("server.cpu", 0);
-    private Date d = new Date();
+    private Date date = new Date();
     private JLBH lth;
-    private String fixMessage;
 
     private ByteBuffer bb;
     private SocketChannel socket;
     private byte[] fixMessageBytes;
-    private NanoSampler onServer;
-    private NanoSampler calendarProbe;
+    private NanoSampler dateProbe;
 
     public static void main(String[] args) {
         JLBHOptions lth = new JLBHOptions()
                 .warmUpIterations(50_000)
-                .iterations(1_000_000)
-                .throughput(100_000)
+                .iterations(100_000)
+                .throughput(20_000)
                 .runs(3)
                 .recordOSJitter(true)
                 .accountForCoordinatedOmmission(true)
@@ -44,8 +46,7 @@ public class DateSerialiseJLBHTcpTask implements JLBHTask {
     @Override
     public void init(JLBH lth) {
         this.lth = lth;
-        onServer = lth.addProbe("on server");
-        calendarProbe = lth.addProbe("calendar ");
+        dateProbe = lth.addProbe("date serialisation ");
         try {
             runServer(port);
             Jvm.pause(200);
@@ -58,7 +59,7 @@ public class DateSerialiseJLBHTcpTask implements JLBHTask {
             e.printStackTrace();
         }
 
-        fixMessage = "8=FIX.4.2\u00019=211\u000135=D\u000134=3\u000149=MY-INITIATOR-SERVICE\u000152=20160229-" +
+        String fixMessage = "8=FIX.4.2\u00019=211\u000135=D\u000134=3\u000149=MY-INITIATOR-SERVICE\u000152=20160229-" +
                 "09:04:14.459\u000156=MY-ACCEPTOR-SERVICE\u00011=ABCTEST1\u000111=863913604164909\u000121=3\u000122=5" +
                 "\u000138=1\u000140=2\u000144=200\u000148=LCOM1\u000154=1\u000155=LCOM1\u000159=0\u000160=20160229-09:" +
                 "04:14.459\u0001167=FUT\u0001200=201106\u000110=144\u0001\n";
@@ -102,21 +103,17 @@ public class DateSerialiseJLBHTcpTask implements JLBHTask {
                         if (socket.read(bb) < 0)
                             throw new EOFException();
                     } while (bb.remaining() > 0);
-                    onServer.sampleNanos(System.nanoTime() - bb.getLong(4));
 
                     long now = System.nanoTime();
                     try {
+                        //Running the date serialisation but this time inside the TCP callback.
                         ByteArrayOutputStream out = new ByteArrayOutputStream();
                         ObjectOutputStream oos = new ObjectOutputStream(out);
-                        //oos.writeObject(Calendar.getInstance());
-                        oos.writeObject(d);
-                        //oos.writeObject(new Integer(1));
+                        oos.writeObject(date);
 
                         ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(out.toByteArray()));
-                        //c = (Calendar)ois.readObject();
-                        d = (Date)ois.readObject();
-                        //int x = (Integer)ois.readObject();
-                        calendarProbe.sampleNanos(System.nanoTime() - now);
+                        date = (Date)ois.readObject();
+                        dateProbe.sampleNanos(System.nanoTime() - now);
                     } catch (IOException | ClassNotFoundException e) {
                         e.printStackTrace();
                     }
@@ -149,25 +146,18 @@ public class DateSerialiseJLBHTcpTask implements JLBHTask {
 
     @Override
     public void run(long startTimeNs) {
-        long value = startTimeNs;
         bb.position(0);
         bb.putInt(bb.remaining());
-        bb.putLong(value);
+        bb.putLong(startTimeNs);
         bb.position(0);
-        while (bb.remaining() > 0)
-            try {
-                if (socket.write(bb) < 0) ;
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        writeAll(socket, bb);
 
         bb.position(0);
-        while (bb.remaining() > 0)
-            try {
-                if (socket.read(bb) < 0) ;
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        try {
+            readAll(socket, bb);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         bb.flip();
         if (bb.getInt(0) != fixMessageBytes.length) {
@@ -177,7 +167,19 @@ public class DateSerialiseJLBHTcpTask implements JLBHTask {
         lth.sample(System.nanoTime() - startTimeNs);
     }
 
-    @Override
-    public void complete() {
+    private static void readAll(SocketChannel socket, ByteBuffer bb) throws IOException {
+        bb.clear();
+        do {
+            if (socket.read(bb) < 0)
+                throw new EOFException();
+        } while (bb.remaining() > 0);
+    }
+
+    private static void writeAll(SocketChannel socket, ByteBuffer bb) {
+        try {
+            while (bb.remaining() > 0 && socket.write(bb) >= 0) ;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

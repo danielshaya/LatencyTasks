@@ -9,10 +9,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Date;
 
 /**
- * Created by daniel on 23/03/2016.
+ * Created to show the effects of running code within more complex code.
+ * Date serialisation as a micro benchmark vs date serialisation inside a TCP call.
  */
 public class DateSerialisedJLBHTask implements JLBHTask {
-    private Date d = new Date();
+    private Date date = new Date();
     private JLBH lth;
 
     public static void main(String[] args) throws InvocationTargetException, IllegalAccessException, IOException, ClassNotFoundException {
@@ -32,10 +33,10 @@ public class DateSerialisedJLBHTask implements JLBHTask {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(out);
-            oos.writeObject(d);
+            oos.writeObject(date);
 
             ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(out.toByteArray()));
-            d = (Date)ois.readObject();
+            date = (Date)ois.readObject();
             lth.sample(System.nanoTime() - startTimeNS);
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();

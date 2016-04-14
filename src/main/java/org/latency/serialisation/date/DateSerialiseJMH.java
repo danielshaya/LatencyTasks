@@ -16,15 +16,15 @@ import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Created by daniel on 22/03/2016.
+ * Created to show the effects of running code within more complex code.
+ * Date serialisation as a micro benchmark vs date serialisation inside a TCP call.
  */
 @State(Scope.Thread)
 public class DateSerialiseJMH {
-    private Date d = new Date();
-    static ByteArrayOutputStream out = null;
-    static ObjectOutputStream oos = null;
+    private final Date date = new Date();
 
-    public static void main(String[] args) throws InvocationTargetException, IllegalAccessException, RunnerException, IOException, ClassNotFoundException {
+    public static void main(String[] args) throws InvocationTargetException,
+            IllegalAccessException, RunnerException, IOException, ClassNotFoundException {
 
         if (OS.isLinux())
             Affinity.setAffinity(2);
@@ -38,10 +38,10 @@ public class DateSerialiseJMH {
                     .include(DateSerialiseJMH.class.getSimpleName())
                     .warmupIterations(6)
                     .forks(1)
-                    .measurementIterations(10)
-                    .mode(Mode.Throughput)
-                    .measurementTime(TimeValue.seconds(5))
-                    .timeUnit(TimeUnit.SECONDS)
+                    .measurementIterations(5)
+                    .mode(Mode.SampleTime)
+                    .measurementTime(TimeValue.seconds(3))
+                    .timeUnit(TimeUnit.MICROSECONDS)
                     .build();
 
             new Runner(opt).run();
@@ -49,12 +49,12 @@ public class DateSerialiseJMH {
     }
 
     @Benchmark
-    public void test() throws IOException, ClassNotFoundException {
-        out = new ByteArrayOutputStream();
-        oos = new ObjectOutputStream(out);
-        oos.writeObject(d);
+    public Date test() throws IOException, ClassNotFoundException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(out);
+        oos.writeObject(date);
 
         ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(out.toByteArray()));
-        d = (Date)ois.readObject();
+        return (Date)ois.readObject();
     }
 }
