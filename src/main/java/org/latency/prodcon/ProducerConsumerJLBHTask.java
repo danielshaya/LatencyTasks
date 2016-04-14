@@ -1,6 +1,5 @@
 package org.latency.prodcon;
 
-import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.jlbh.JLBH;
 import net.openhft.chronicle.core.jlbh.JLBHOptions;
 import net.openhft.chronicle.core.jlbh.JLBHTask;
@@ -9,7 +8,7 @@ import net.openhft.chronicle.core.util.NanoSampler;
 import java.util.concurrent.*;
 
 /**
- *
+ * Simple test to demonstrate how to use JLBH
  */
 public class ProducerConsumerJLBHTask implements JLBHTask {
 
@@ -21,10 +20,11 @@ public class ProducerConsumerJLBHTask implements JLBHTask {
 
 
     public static void main(String[] args){
+        //Create the JLBH options you require for the benchmark
         JLBHOptions lth = new JLBHOptions()
                 .warmUpIterations(40_000)
-                .iterations(100_000)
-                .throughput(40_000)
+                .iterations(1_000_000)
+                .throughput(100_000)
                 .runs(3)
                 .recordOSJitter(true)
                 .accountForCoordinatedOmmission(true)
@@ -35,9 +35,9 @@ public class ProducerConsumerJLBHTask implements JLBHTask {
     @Override
     public void run(long startTimeNS) {
         try {
-            long startTime = System.nanoTime();
+            long putSamplerStart = System.nanoTime();
             queue.put(startTimeNS);
-            putSampler.sampleNanos(System.nanoTime() - startTime);
+            putSampler.sampleNanos(System.nanoTime() - putSamplerStart);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -51,10 +51,11 @@ public class ProducerConsumerJLBHTask implements JLBHTask {
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         executorService.submit(()->{
             while(!completed) {
-                long startTime = System.nanoTime();
-                Long startTime2 = queue.poll(1, TimeUnit.SECONDS);
-                pollSampler.sampleNanos(System.nanoTime() - startTime);
-                lth.sample(System.nanoTime() - startTime2);
+                long pollSamplerStart = System.nanoTime();
+                Long iterationStart = queue.poll(1, TimeUnit.SECONDS);
+                pollSampler.sampleNanos(System.nanoTime() - pollSamplerStart);
+                //call back JLBH to signify that the iteration has ended
+                lth.sample(System.nanoTime() - iterationStart);
             }
             return null;
         });
