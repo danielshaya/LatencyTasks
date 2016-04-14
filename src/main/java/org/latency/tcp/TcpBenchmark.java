@@ -29,7 +29,7 @@ public class TcpBenchmark implements JLBHTask {
         JLBHOptions jlbhOptions = new JLBHOptions()
                 .warmUpIterations(50000)
                 .iterations(50000)
-                .throughput(10000)
+                .throughput(20000)
                 .runs(5)
                 .jlbhTask(new TcpBenchmark());
         new JLBH(jlbhOptions).start();
@@ -77,22 +77,16 @@ public class TcpBenchmark implements JLBHTask {
 
                 ByteBuffer bb = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder());
                 while (true) {
-
-                    do {
-                        if (socket.read(bb) < 0)
-                            throw new EOFException();
-                    } while (bb.remaining() > 0);
+                    readAll(socket, bb);
 
                     bb.flip();
                     long time = System.nanoTime();
-                    client2serverProbe.sampleNanos(time -bb.getLong());
-                    bb.position(0);
-                    bb.putLong(0, time);
-
-                    if (socket.write(bb) < 0)
-                        throw new EOFException();
-
+                    client2serverProbe.sampleNanos(time - bb.getLong());
                     bb.clear();
+                    bb.putLong(time);
+                    bb.flip();
+
+                    writeAll(socket, bb);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -113,32 +107,38 @@ public class TcpBenchmark implements JLBHTask {
 
     }
 
+    private static void readAll(SocketChannel socket, ByteBuffer bb) throws IOException {
+        bb.clear();
+        do {
+            if (socket.read(bb) < 0)
+                throw new EOFException();
+        } while (bb.remaining() > 0);
+    }
+
     @Override
     public void run(long startTimeNs) {
         bb.position(0);
         bb.putLong(System.nanoTime());
         bb.position(0);
-        while (bb.remaining() > 0)
-            try {
-                if (socket.write(bb) < 0) ;
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        writeAll(socket, bb);
 
         bb.position(0);
-        while (bb.remaining() > 0) {
-            try {
-                if (socket.read(bb) < 0);
-
-                if(bb.position()==8) {
-                    server2clientProbe.sampleNanos(System.nanoTime() - bb.getLong(0));
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        try {
+            readAll(socket, bb);
+            server2clientProbe.sampleNanos(System.nanoTime() - bb.getLong(0));
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
         jlbh.sample(System.nanoTime() - startTimeNs);
+    }
+
+    private static void writeAll(SocketChannel socket, ByteBuffer bb) {
+        try {
+            while (bb.remaining() > 0 && socket.write(bb) >= 0) ;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override

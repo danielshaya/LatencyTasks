@@ -6,23 +6,25 @@ import net.openhft.chronicle.core.jlbh.JLBHOptions;
 import net.openhft.chronicle.core.jlbh.JLBHTask;
 import net.openhft.chronicle.core.util.NanoSampler;
 
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 /**
  *
  */
 public class ProducerConsumerJLBHTask implements JLBHTask {
 
-    private final ArrayBlockingQueue<Long> queue = new ArrayBlockingQueue(10000);
-    private NanoSampler nanoSampler;
+    private final BlockingQueue<Long> queue = new ArrayBlockingQueue(2);
+
+    private NanoSampler putSampler;
+    private NanoSampler pollSampler;
+    private volatile boolean completed;
 
 
     public static void main(String[] args){
         JLBHOptions lth = new JLBHOptions()
                 .warmUpIterations(40_000)
-                .iterations(10_000)
-                .throughput(1_000)
+                .iterations(100_000)
+                .throughput(40_000)
                 .runs(3)
                 .recordOSJitter(true)
                 .accountForCoordinatedOmmission(true)
@@ -35,7 +37,7 @@ public class ProducerConsumerJLBHTask implements JLBHTask {
         try {
             long startTime = System.nanoTime();
             queue.put(startTimeNS);
-            nanoSampler.sampleNanos(System.nanoTime() - startTime);
+            putSampler.sampleNanos(System.nanoTime() - startTime);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -43,17 +45,24 @@ public class ProducerConsumerJLBHTask implements JLBHTask {
 
     @Override
     public void init(JLBH lth) {
-        nanoSampler = lth.addProbe("put operation");
+        putSampler = lth.addProbe("put operation");
+        pollSampler = lth.addProbe("poll operation");
 
-        Executors.newSingleThreadExecutor().submit(()->{
-            while(true) {
-                Long startTime = queue.take();
-                if (startTime != null) {
-                    lth.sample(System.nanoTime() - startTime);
-                }else{
-                    Jvm.busyWaitMicros(1);
-                }
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        executorService.submit(()->{
+            while(!completed) {
+                long startTime = System.nanoTime();
+                Long startTime2 = queue.poll(1, TimeUnit.SECONDS);
+                pollSampler.sampleNanos(System.nanoTime() - startTime);
+                lth.sample(System.nanoTime() - startTime2);
             }
+            return null;
         });
+        executorService.shutdown();
+    }
+
+    @Override
+    public void complete(){
+        completed = true;
     }
 }
