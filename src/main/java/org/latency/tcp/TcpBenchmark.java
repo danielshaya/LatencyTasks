@@ -29,8 +29,8 @@ public class TcpBenchmark implements JLBHTask {
         JLBHOptions jlbhOptions = new JLBHOptions()
                 .warmUpIterations(50000)
                 .iterations(50000)
-                .throughput(20000)
-                .runs(5)
+                .throughput(5000)
+                .runs(3)
                 .jlbhTask(new TcpBenchmark());
         new JLBH(jlbhOptions).start();
     }

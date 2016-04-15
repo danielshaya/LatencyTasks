@@ -18,6 +18,3 @@ HeartBtInt=30
 CheckLatency=N
 SocketConnectPort=12002
 SocketConnectHost=127.0.0.1
-#UseDataDictionary=Y
-#DataDictionary=C:\test\app\QuickFixJ\initiator\FIX42.xml
-#FileStorePath=C:\test\app\QuickFixJ\initiator\ICE

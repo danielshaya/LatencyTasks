@@ -17,6 +17,3 @@ EndTime=00:00:00
 HeartBtInt=30
 CheckLatency=N
 SocketAcceptPort=12002
-#UseDataDictionary=Y
-#DataDictionary=C:\test\app\QuickFixJ\acceptor\FIX42.xml
-#FileStorePath=C:\test\app\QuickFixJ\acceptor\ICE
