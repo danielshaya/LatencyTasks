@@ -13,8 +13,36 @@ import java.util.Date;
 import java.util.concurrent.Executors;
 
 /**
- * Created by daniel on 19/02/2016.
- * Latency task to test sending a message in QuickFix
+ * Latency task to test sending a message in QuickFix running on Dev server.
+ * Intel(R) Xeon(R) CPU E5-2650 v2 @ 2.60GHz
+ *
+ * Throughput 2000
+ Percentile   run1         run2         run3      % Variation   var(log)
+ 50:           270.34       270.34       233.47         9.52       12.43
+ 90:           352.26       335.87      1867.78        75.25       16.25
+ 99:          6684.67      4849.66     69206.02        89.84       24.78
+ 99.9:       13369.34     12845.06    163577.86        88.67       27.85
+ 99.99:      81788.93     20447.23    163577.86        82.35       25.46
+ worst:     111149.06     98566.14    163577.86        30.54       28.47
+ *
+ * Throughput 10,000
+ Percentile   run1         run2         run3      % Variation   var(log)
+ 50:           184.32       176.13       176.13         0.00       11.76
+ 90:           573.44       270.34       249.86         5.18       11.65
+ 99:         19398.66      2686.98      5111.81        37.56       16.28
+ 99.9:       28835.84      7733.25      7995.39         2.21       18.50
+ 99.99:      30932.99      9699.33      9175.04         3.67       19.10
+ worst:      30932.99      9699.33      9175.04         3.67       19.10
+ *
+ * Throughput 50,000
+ Percentile   run1         run2         run3      % Variation   var(log)
+ 50:           176.13       176.13       176.13         0.00       11.82
+ 90:         12845.06     29884.42      3604.48        82.94       21.01
+ 99:         34603.01     94371.84     17301.50        74.81       25.26
+ 99.9:       42991.62     98566.14     25690.11        65.41       25.84
+ 99.99:      45088.77     98566.14     27787.26        62.94       25.93
+ worst:      45088.77     98566.14     27787.26        62.94       25.93
+
  */
 public class QFJLBHTask implements JLBHTask {
 
@@ -56,8 +84,8 @@ public class QFJLBHTask implements JLBHTask {
 
         JLBHOptions jlbhOptions = new JLBHOptions()
                 .warmUpIterations(20_000)
-                .iterations(10_000)
-                .throughput(2_000)
+                .iterations(20_000)
+                .throughput(10_000)
                 .runs(3)
                 .accountForCoordinatedOmmission(false)
                 .jlbhTask(new QFJLBHTask());
